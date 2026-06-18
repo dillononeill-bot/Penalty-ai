@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Beat the Keeper — it reads your mind</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  :root{
+    --void:#04060c; --turf1:#0a1f14; --turf2:#0c2a1a; --panel:#0d1320; --hair:#1b2436;
+    --txt:#eaf0fb; --dim:#8a96ad; --faint:#4c5670;
+    --cyan:#15e0ff; --magenta:#ff2e88; --lime:#b4ff1a; --amber:#ffb020; --net:#2a3852;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    color:var(--txt);font-family:'Chakra Petch',system-ui,sans-serif;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;padding:12px;-webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(120% 60% at 50% 120%, rgba(255,255,255,.05) 0%, transparent 60%),
+      repeating-linear-gradient(180deg, #11602f 0px, #11602f 64px, #0e5429 64px, #0e5429 128px);
+  }
+  /* stadium darkening at the top + faint floodlight glow */
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(90% 55% at 50% -10%, rgba(220,240,255,.16), transparent 60%),
+               linear-gradient(180deg, rgba(2,8,4,.55), transparent 30%, rgba(2,8,4,.45));}
+  #app{width:100%;max-width:540px;height:100%;max-height:880px;display:flex;flex-direction:column;gap:12px;position:relative;z-index:1;}
+
+  .top{display:flex;justify-content:space-between;align-items:flex-start;}
+  .title{font-weight:700;font-size:18px;letter-spacing:.5px;line-height:1.1;}
+  .title .sub{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:400;color:var(--dim);
+    letter-spacing:2px;margin-top:5px;text-transform:uppercase;}
+  .reset{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);background:none;border:1px solid var(--hair);
+    border-radius:6px;padding:6px 10px;cursor:pointer;letter-spacing:1px;}
+  .reset:hover{color:var(--txt);border-color:var(--faint);}
+
+  /* scoreboard */
+  .score{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .sc{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:9px 6px;text-align:center;}
+  .sc .k{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);}
+  .sc .v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;margin-top:2px;}
+  .sc.you .v{color:var(--lime);} .sc.gk .v{color:var(--magenta);} .sc.read .v{color:var(--cyan);}
+
+  /* pitch / goal */
+  .goalwrap{position:relative;
+    background:linear-gradient(180deg, rgba(8,40,20,.82), rgba(6,30,15,.9));
+    border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:16px 16px 14px;overflow:hidden;
+    box-shadow:0 12px 40px -16px #000, inset 0 1px 0 rgba(255,255,255,.06);}
+  /* penalty box paint + spot drawn under the goal */
+  .goalwrap::after{content:"";position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
+    width:62%;height:26px;border:2px solid rgba(255,255,255,.35);border-bottom:none;border-radius:50%/100% 100% 0 0;}
+  .pkspot{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;
+    background:rgba(255,255,255,.8);z-index:2;}
+  .keeperline{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--dim);display:flex;justify-content:space-between;margin-bottom:10px;}
+  .keeperline .live{color:var(--cyan);display:flex;align-items:center;gap:6px;}
+  .keeperline .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:pulse 1.3s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  .goal{position:relative;width:100%;aspect-ratio:16/9;margin:0 auto;}
+  /* goal frame */
+  .frame{position:absolute;inset:0;border:5px solid #dfe8f5;border-bottom:none;border-radius:3px 3px 0 0;box-shadow:0 0 20px -6px #dfe8f5;}
+  .net{position:absolute;inset:5px 5px 0 5px;background-image:
+      linear-gradient(var(--net) 1px,transparent 1px),linear-gradient(90deg,var(--net) 1px,transparent 1px);
+      background-size:18px 18px;opacity:.5;}
+  .zones{position:absolute;inset:5px 5px 0 5px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:6px;padding:6px;}
+  .zone{border:1.5px dashed rgba(255,255,255,.14);border-radius:8px;cursor:pointer;position:relative;
+    display:flex;align-items:center;justify-content:center;transition:.12s;}
+  .zone:hover{border-color:var(--lime);background:rgba(180,255,26,.08);}
+  .zone .tag{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,.25);letter-spacing:1px;}
+  .zone:hover .tag{color:var(--lime);}
+  /* keeper's guess intentionally hidden until the dive */
+
+  /* keeper */
+  .keeper{position:absolute;bottom:0;width:18%;height:46%;z-index:3;transition:left .28s cubic-bezier(.5,1.6,.5,1), transform .28s;pointer-events:none;}
+  .keeper .body{position:absolute;inset:0;background:linear-gradient(180deg,var(--magenta),#9a1457);border-radius:40% 40% 18% 18%;box-shadow:0 0 22px -6px var(--magenta);}
+  .keeper .arm{position:absolute;top:18%;width:42%;height:14%;background:var(--magenta);border-radius:6px;box-shadow:0 0 12px -3px var(--magenta);}
+  .keeper .arm.l{left:-30%;transform-origin:right;} .keeper .arm.r{right:-30%;transform-origin:left;}
+
+  /* ball */
+  .ball{position:absolute;width:9%;aspect-ratio:1;border-radius:50%;z-index:4;
+    background:radial-gradient(circle at 35% 30%, #fff, #c7d2e0 70%);box-shadow:0 0 16px -2px #fff;
+    left:46%;bottom:-13%;transition:none;pointer-events:none;}
+
+  /* confidence */
+  .conf{margin-top:12px;}
+  .conf .track{height:9px;background:#060a12;border:1px solid var(--hair);border-radius:6px;overflow:hidden;}
+  .conf .fill{height:100%;width:16%;background:linear-gradient(90deg,var(--cyan),var(--magenta));transition:width .25s;}
+  .conf .nums{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dim);margin-top:6px;}
+  .conf .nums b{color:var(--txt);}
+
+  .verdict{text-align:center;font-family:'JetBrains Mono',monospace;font-size:14px;letter-spacing:1px;min-height:20px;color:var(--dim);font-weight:700;}
+  .verdict.goal{color:var(--lime);} .verdict.save{color:var(--magenta);}
+  .hint{text-align:center;font-size:12px;color:var(--dim);min-height:16px;}
+  .hint b{color:var(--amber);}
+
+  .foot{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);text-align:center;line-height:1.7;margin-top:auto;}
+  .foot b{color:var(--dim);font-weight:500;}
+
+  @media(max-height:720px){.goal{aspect-ratio:2/1;} .sc .v{font-size:18px;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top">
+    <div class="title">BEAT THE KEEPER<span class="sub">pick a corner · it has already guessed</span></div>
+    <button class="reset" id="resetBtn">RESET</button>
+  </div>
+
+  <div class="score">
+    <div class="sc you"><div class="k">Goals</div><div class="v" id="goalsV">0</div></div>
+    <div class="sc gk"><div class="k">Saves</div><div class="v" id="savesV">0</div></div>
+    <div class="sc read"><div class="k">It reads you</div><div class="v" id="readV">—</div></div>
+  </div>
+
+  <div class="goalwrap">
+    <div class="keeperline"><span>keeper's confidence</span><span class="live">reading your habits</span></div>
+    <div class="goal" id="goal">
+      <div class="frame"></div>
+      <div class="net"></div>
+      <div class="zones" id="zones">
+        <div class="zone" data-z="0"><span class="tag">TOP-L</span></div>
+        <div class="zone" data-z="1"><span class="tag">TOP-C</span></div>
+        <div class="zone" data-z="2"><span class="tag">TOP-R</span></div>
+        <div class="zone" data-z="3"><span class="tag">LOW-L</span></div>
+        <div class="zone" data-z="4"><span class="tag">LOW-C</span></div>
+        <div class="zone" data-z="5"><span class="tag">LOW-R</span></div>
+      </div>
+      <div class="keeper" id="keeper"><div class="arm l"></div><div class="arm r"></div><div class="body"></div></div>
+      <div class="ball" id="ball"></div>
+      <div class="pkspot"></div>
+    </div>
+    <div class="conf">
+      <div class="track"><div class="fill" id="confFill"></div></div>
+      <div class="nums"><span>keeper confidence <b id="confPct">16%</b></span><span id="note">learning your style…</span></div>
+    </div>
+  </div>
+
+  <div class="verdict" id="verdict">tap a corner to shoot. try to be unpredictable.</div>
+  <div class="hint" id="hint"></div>
+
+  <div class="foot">
+    <b>under the hood:</b> a multi-order Markov model of your shot history, learning live in-browser. no libraries.<br>
+    built by <b>Dillon</b> · ex-economist → AI
+  </div>
+</div>
+
+<script>
+// ---------- verified 6-zone predictor ----------
+function makePredictor(K){
+  const tables=[];for(let k=0;k<=K;k++)tables.push(new Map());
+  const skill=new Array(K+1).fill(1);let hist=[];
+  function dist(){const agg=new Array(6).fill(0);let any=false;
+    for(let k=0;k<=K;k++){const ctx=k===0?'*':(hist.length>=k?hist.slice(-k).join(','):null);if(ctx===null)continue;
+      const t=tables[k].get(ctx);if(!t)continue;const tot=t.reduce((a,b)=>a+b,0);if(!tot)continue;
+      const w=skill[k]*(k+1);for(let z=0;z<6;z++)agg[z]+=w*(t[z]/tot);any=true;}
+    if(!any)return agg.map(()=>1/6);const s=agg.reduce((a,b)=>a+b,0);return agg.map(v=>v/s);}
+  function predict(){const d=dist();let best=0;for(let z=1;z<6;z++)if(d[z]>d[best])best=z;return{pred:best,conf:d[best],dist:d};}
+  function learn(a){for(let k=0;k<=K;k++){const ctx=k===0?'*':(hist.length>=k?hist.slice(-k).join(','):null);if(ctx===null)continue;
+      const t=tables[k].get(ctx);if(t){const tot=t.reduce((x,y)=>x+y,0);if(tot){let g=0;for(let z=1;z<6;z++)if(t[z]>t[g])g=z;skill[k]=skill[k]*0.9+(g===a?1:0)*0.1;}}
+      if(!tables[k].has(ctx))tables[k].set(ctx,new Array(6).fill(0));tables[k].get(ctx)[a]++;}
+    hist.push(a);if(hist.length>80)hist.shift();}
+  return{predict,learn};
+}
+const col=z=>z%3, isTop=z=>z<3;
+function isSave(commit,shot){
+  if(commit===shot)return true;
+  if(col(commit)===col(shot)){ if(col(shot)===1)return true; return Math.random()<0.45; }
+  return false;
+}
+
+// ---------- state ----------
+const $=id=>document.getElementById(id);
+let ai,goals,saves,round,locked,busy;
+function reset(){
+  ai=makePredictor(4);goals=0;saves=0;round=0;busy=false;
+  locked=ai.predict();
+  resetKeeperBall();
+  paintPrediction();render();
+  $('verdict').className='verdict';$('verdict').textContent='tap a corner to shoot. try to be unpredictable.';
+  $('hint').textContent='';
+}
+function zoneCenter(z){ // returns {leftPct, bottomPct} within goal box for ball/keeper targeting
+  const c=col(z); const lx=[20,50,80][c]; const by=isTop(z)?70:35; return {lx,by};
+}
+function paintPrediction(){
+  // keeper's predicted zone stays hidden — only its confidence is shown
+  const pct=Math.round(locked.conf*100);
+  $('confFill').style.width=Math.max(8,pct)+'%';
+  $('confPct').textContent=pct+'%';
+}
+function render(){
+  $('goalsV').textContent=goals;$('savesV').textContent=saves;
+  $('readV').textContent=round>0?Math.round(saves/round*100)+'%':'—';
+}
+function resetKeeperBall(){
+  const k=$('keeper');k.style.left='41%';k.style.transform='translateY(0)';
+  const b=$('ball');b.style.transition='none';b.style.left='46%';b.style.bottom='-13%';b.style.transform='none';
+}
+
+function shoot(z){
+  if(busy)return; busy=true;
+  round++;
+  const save=isSave(locked.pred,z);
+  const ball=$('ball'), keeper=$('keeper');
+  const tgt=zoneCenter(z); const kp=zoneCenter(locked.pred);
+  // keeper dives to its predicted zone
+  keeper.style.left=(kp.lx-9)+'%';
+  keeper.style.transform = isTop(locked.pred)?'translateY(-30%)':'translateY(0)';
+  // ball flies to chosen zone
+  ball.style.transition='left .42s ease-out, bottom .42s ease-out, transform .42s';
+  requestAnimationFrame(()=>{
+    ball.style.left=(tgt.lx-4.5)+'%';
+    ball.style.bottom=(tgt.by-6)+'%';
+    ball.style.transform='scale(.72)';
+  });
+
+  setTimeout(()=>{
+    if(save){ saves++; $('verdict').className='verdict save'; $('verdict').textContent='SAVED — it read your '+zoneName(z)+'.'; }
+    else    { goals++; $('verdict').className='verdict goal'; $('verdict').textContent='GOAL — it dove '+zoneName(locked.pred)+'.'; }
+    ai.learn(z); locked=ai.predict();
+    render(); updateNote();
+    setTimeout(()=>{ resetKeeperBall(); paintPrediction(); busy=false; }, 650);
+  }, 440);
+}
+function zoneName(z){return ['top-left','top-centre','top-right','low-left','low-centre','low-right'][z];}
+function updateNote(){
+  const r=round>0?saves/round:0;
+  let n;
+  if(round<5)n='learning your style…';
+  else if(r>0.5)n='it has your number.';
+  else if(r>0.38)n='it\'s onto your habits.';
+  else if(r>0.25)n='close — you\'re fairly random.';
+  else n='you\'re beating it. impressive.';
+  $('note').textContent=n;
+  if(round===8)$('hint').innerHTML='tip: favouring a corner feels safe. <b>that\'s the tell.</b>';
+  else if(round===20)$('hint').innerHTML = r>0.38?'<b>'+Math.round(r*100)+'% saved.</b> random guessing would save ~28%.':'';
+  else if(round>0&&round%15===0&&r>0.45)$('hint').innerHTML='<b>'+Math.round(r*100)+'%</b> read rate — it\'s in your head.';
+}
+
+// ---------- input ----------
+document.querySelectorAll('.zone').forEach(el=>{
+  el.addEventListener('click',()=>shoot(+el.dataset.z));
+});
+window.addEventListener('keydown',e=>{
+  const map={'7':0,'8':1,'9':2,'4':3,'5':4,'6':5,'q':0,'w':1,'e':2,'a':3,'s':4,'d':5};
+  const k=e.key.toLowerCase(); if(k in map){e.preventDefault();shoot(map[k]);}
+});
+$('resetBtn').addEventListener('click',reset);
+reset();
+</script>
+</body>
+</html>
